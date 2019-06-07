@@ -5,8 +5,8 @@ rm(list=ls())
 # Fetch command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-hild_dir <- args[1]
-hmis_dir <- args[2]
+hild_dir <- "/home/t77/data/HILD/"
+hmis_dir <- "/home/t77/data/HMIS/2016/"
 
 # ==========================================================================
 # Library
@@ -42,7 +42,7 @@ if(!require(lubridate)){
 hmis <- fread(paste0(hmis_dir,"puget_preprocessed.csv")) %>%
 		mutate(pid0 = paste("HMIS0_",PersonalID,sep=""))
 
-pha <- fread(paste0(hild_dir,"pha_longitudinal.csv")) %>%
+pha <- fread(paste0(hild_dir,"pha_longitudinal_03_2019.csv")) %>%
 		mutate(pid0 = paste("PHA0_",pid, sep = ""))
 
 
