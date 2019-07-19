@@ -25,6 +25,11 @@ if(!require(data.table)){
 	require(data.table)
 }
 
+if(!require(RecordLinkage)){
+	install.packages("RecordLinkage")
+	require(RecordLinkage)
+}
+
 if(!require(tidyverse)){
 	devtools::install_github("tidyverse/tidyverse")
 	require(tidyverse)
@@ -38,13 +43,20 @@ if(!require(lubridate)){
 # Data pull
 # ==========================================================================
 
-path <- "/home/ubuntu/data"
+path <- "/home/t77/data"
 
-hmis <- fread(paste0(path,"/HMIS/2016/puget_preprocessed.csv")) %>%
-		mutate(pid0 = paste("HMIS0_",PersonalID,sep=""))
+hmis <-
+  fread(paste0("/home/",usr,"/data/HILD/puget_preprocessed_07012019.csv")) %>%
+  mutate(pid0 = paste("HMIS0_",PersonalID,sep=""),
+         pid1 = paste0("HMIS1_",
+                       stringr::str_pad(seq(1,nrow(.)),6,pad='0')))
 
-pha <- fread(paste0(path,"/HILD/pha_longitudinal.csv")) %>%
-		mutate(pid0 = paste("PHA0_",pid, sep = ""))
+pha <-
+  fread(paste0("/home/",usr,"/data/HILD/pha_longitudinal_07_01_2019.csv")) %>%
+  # pid comes from PHA, then pid0 is an id for our purposes
+  mutate(pid0 = paste("PHA0_", pid, sep = ""),
+         pid1 = paste0("PHA1_",
+                       stringr::str_pad(seq(1,nrow(.)),6,pad='0')))
 
 
 # ==========================================================================
@@ -186,6 +198,149 @@ df_sub <- df %>% filter(!grepl("REFUSED",lname),
 # ==========================================================================
 
 write.csv(df_sub, paste0(path,"/HILD/PreLinkData_test.csv"))
+
+# ==========================================================================
+# ==========================================================================
+# ==========================================================================
+# WIP Record Linkage
+# ==========================================================================
+# ==========================================================================
+# ==========================================================================
+
+
+
+# ==========================================================================
+# Record Linkages
+# ==========================================================================
+
+### Fields
+	s <- c( "ssn1","dob1_d","dob1_m","dob_y","fname","mname","lname","suf")
+	p <- c("lname", "fname", "mname")
+
+### ssn1 RL
+	system.time(
+		rl_ssn1 <- rlink(df = df_sub,
+			block = "ssn1",
+			string = s,
+			phonetic = p
+			))
+	gc()
+
+### dob1_ym RL
+	system.time(
+		rl_dob1_ym <- rlink(df = df_sub,
+			block = c("dob_y","dob1_m"),
+			string = s,
+			phonetic = p,
+			name_wt = "ym_wt"
+			))
+	gc()
+
+### fname RL
+	system.time(
+		rl_fname <- rlink(df = df_sub,
+			block = c("fname"),
+			string = s,
+			phonetic = p,
+			threshold = .1,
+			name_wt = "fname_wt"
+			))
+	gc()
+
+### lname RL
+	system.time(
+		rl_lname <- rlink(df = df_sub,
+			block = c("lname"),
+			string = s,
+			phonetic = p,
+			threshold = .1,
+			name_wt = "lname_wt"
+			))
+	gc()
+
+# ==========================================================================
+# Create link df
+# ==========================================================================
+
+### Join links
+	link <- rl_ssn1 %>%
+			select(ssn.1:ssn_dq.1,
+				   pid0.1,
+				   pid0.2,
+				   pid1.1,
+				   pid1.2,
+				   pid2.1,
+				   pid2.2,
+				   ends_with("_wt"))
+
+	link <- full_join(link,
+					  rl_dob1_ym %>%
+			select(pid2.1,
+				   pid2.2,
+				   ends_with("_wt")))
+
+	link <- full_join(link,
+					  rl_fname %>%
+			select(pid2.1,
+				   pid2.2,
+				   ends_with("_wt")))
+
+	link <- full_join(link,
+					  rl_lname %>%
+			select(pid2.1,
+				   pid2.2,
+				   ends_with("_wt")))
+
+### Change NA to 0
+	link <- link %>%
+			mutate_at(vars(ends_with("wt")),
+					 	   funs(ifelse(is.na(.)==T,
+					  	   0.0,
+					  	   .))
+					  )
+	glimpse(link)
+
+# ==========================================================================
+# Create product weights
+# ==========================================================================
+
+### Weighting function
+	wtp <- function(p,w){
+			1-(prod((1-p)^w))^(1/sum(w))
+		}
+
+### Different weighting scenerios
+	w1 <- link %>%
+		mutate(wtp1111 = apply( # apply function across rows
+						select(., ends_with("wt")), # select columns to apply to
+						1, # w/in each row (2 would do it w/in each col)
+						wtp, # function to apply
+						w=c(1,1,1,1)), # w argument
+			   wtp1.8.8.8 = apply(
+						select(., ends_with("wt")),
+						1,
+						wtp,
+						w=c(1,.8,.8,.8)),
+			   wtp1.5.5.5 = apply(
+						select(., ends_with("wt")),
+						1,
+						wtp,
+						w=c(1,.5,.5,.5))
+						)
+
+### View distributions
+
+	head(w1) # weights all at 1
+	hist(w1$wtp111, breaks = 40)
+	hist(w1$wtp1.8.8, breaks = 40)
+	hist(w1$wtp1.5.5, breaks = 40)
+
+# ==========================================================================
+# Save file
+# ==========================================================================
+
+	write.csv(w1, "data/Housing/links/WeightedLinks.csv")
+	write.csv(df_sub, "data/Housing/links/PreLinkData.csv")
 
 # ==========================================================================
 # End code
