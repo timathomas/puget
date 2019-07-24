@@ -32,7 +32,6 @@ if(!require(lubridate)){
 # ==========================================================================
 # Data pull
 # ==========================================================================
-
 hmis <- fread(paste0(hmis_dir,"puget_preprocessed.csv")) %>%
 		mutate(pid0 = paste("HMIS0_",PersonalID,sep=""))
 
@@ -148,10 +147,15 @@ df <- bind_rows(pha.rl,hmis.rl) %>%
 			dob1_m = month(dob1),
 			dob1_d = day(dob1)) %>%
 	distinct()
+# Remove unicode charactrers from lnames and fnames 
 
 df_sub <- df %>% filter(!grepl("REFUSED",lname),
 						!grepl("REFUSED",fname),
 						!grepl("ANONYMOUS",lname),
-						!grepl("ANONYMOUS",fname))
+						!grepl("ANONYMOUS",fname),
+						!grepl("BABY",fname),
+						!grepl("UNBORN",fname)) %>%
+  mutate(lname = str_replace(lname, "[[:punct:]]", ""),
+         fname = str_replace(fname, "[[:punct:]]", ""))
 
 write.csv(df_sub, paste0(hild_dir,"PreLinkData.csv"))
