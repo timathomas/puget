@@ -47,7 +47,7 @@ ENTRY_EXIT_SUFFIX = ['_entry', '_exit', '_update']
 
 # Names that should be excluded:
 NAME_EXCLUSION = ["consent", "refused", "anonymous", "client",
-                  "refsued", "noname", "unknown"]
+                  "refsued", "noname", "unknown", "data", "not collected"]
 
 # dict of default metadata file names
 METADATA_FILES = {'enrollment': 'enrollment.json',
