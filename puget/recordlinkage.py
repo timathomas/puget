@@ -6,7 +6,7 @@ import recordlinkage as rl
 import networkx
 
 
-MATCH_THRESHOLD = 0.5
+MATCH_THRESHOLD = 0.6
 STRING_THRESHOLD = 0.85
 
 def block_and_match(df, block_variable, comparison_dict, match_threshold=MATCH_THRESHOLD,
