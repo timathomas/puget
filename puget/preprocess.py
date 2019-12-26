@@ -47,7 +47,7 @@ ENTRY_EXIT_SUFFIX = ['_entry', '_exit', '_update']
 
 # Names that should be excluded:
 NAME_EXCLUSION = ["consent", "refused", "anonymous", "client",
-                  "refsued", "noname", "unknown"]
+                  "refsued", "noname", "unknown", "data", "not collected"]
 
 # dict of default metadata file names
 METADATA_FILES = {'enrollment': 'enrollment.json',
@@ -57,7 +57,8 @@ METADATA_FILES = {'enrollment': 'enrollment.json',
                   'employment_education': 'employment_education.json',
                   'health_dv': 'health_dv.json',
                   'income': 'income.json',
-                  'project': 'project.json'}
+                  'project': 'project.json',
+                  'update': 'update_table.json'}
 
 for k, v in METADATA_FILES.items():
     METADATA_FILES[k] = op.join(DATA_PATH, 'metadata', v)
@@ -87,8 +88,11 @@ file_path_boilerplate = (
 metdata_boilerplate = (
     """
     metadata_file : string
-        name of json metadata file with lists of columns to use for
+        Name of json metadata file with lists of columns to use for
         deduplication, columns to drop, categorical and time-like columns
+    metadata_update : dict
+        Dictionary containing any keys that should be updated from the metadata_file.
+        This allows the user to change just a few values relative to the metadata_file.
     """)
 
 
@@ -294,7 +298,8 @@ def split_rows_to_columns(df, category_column, category_suffix, merge_columns):
 
 
 def read_entry_exit_table(metadata, county=None, file_spec=None, data_dir=None,
-                          paths=None, suffixes=ENTRY_EXIT_SUFFIX):
+                          paths=None, suffixes=ENTRY_EXIT_SUFFIX,
+                          metadata_update=None):
     """
     Read in tables with entry & exit values, convert entry & exit rows to
     columns
@@ -310,6 +315,10 @@ def read_entry_exit_table(metadata, county=None, file_spec=None, data_dir=None,
             person_enrollment_IDs, and values indicating entry and exit
             collection stage
 
+    metadata_update : dict
+        Dictionary containing any keys that should be updated from the metadata_file.
+        This allows the user to change just a few values relative to the metadata_file.
+        Only used if metadata is a string.
     %s
 
     Returns
@@ -319,7 +328,7 @@ def read_entry_exit_table(metadata, county=None, file_spec=None, data_dir=None,
     entry & exit
     """
     if not isinstance(metadata, dict):
-        metadata = get_metadata_dict(metadata)
+        metadata = get_metadata_dict(metadata, metadata_update=metadata_update)
     extra_metadata = {'collection_stage_column': None,
                       'entry_stage_val': None,
                       'exit_stage_val': None,
@@ -354,16 +363,30 @@ read_entry_exit_table.__doc__ = read_entry_exit_table.__doc__ % (
         file_path_boilerplate)
 
 
-def get_metadata_dict(metadata_file):
-    """Little function to read a JSON metadata file into a dict."""
+def get_metadata_dict(metadata_file, metadata_update=None):
+    """
+    Little function to read a JSON metadata file into a dict.
+
+    Parameters
+    ----------
+    metadata_update : dict
+        Dictionary containing any keys that should be updated from the metadata_file.
+        This allows the user to change just a few values relative to the metadata_file.
+    """
     metadata_handle = open(metadata_file)
     metadata = json.loads(metadata_handle.read())
     _ = metadata.pop('name')
+
+    if metadata_update is not None:
+        for key, val in metadata_update.items():
+            metadata[key] = val
+
     return metadata
 
 
 def get_enrollment(county=None, groups=True, file_spec=None, data_dir=None,
-                   paths=None, metadata_file=METADATA_FILES['enrollment']):
+                   paths=None, metadata_file=METADATA_FILES['enrollment'],
+                   metadata_update=None):
     """
     Read in the raw Enrollment tables.
 
@@ -387,7 +410,7 @@ def get_enrollment(county=None, groups=True, file_spec=None, data_dir=None,
     if file_spec is None:
         file_spec = 'Enrollment.csv'
 
-    metadata = get_metadata_dict(metadata_file)
+    metadata = get_metadata_dict(metadata_file, metadata_update=metadata_update)
     groupID_column = metadata.pop('groupID_column')
     enid_column = metadata.pop('person_enrollment_ID')
     pid_column = metadata.pop('person_ID')
@@ -416,7 +439,7 @@ get_enrollment.__doc__ = get_enrollment.__doc__ % (file_path_boilerplate,
 
 
 def get_exit(county=None, file_spec=None, data_dir=None, paths=None,
-             metadata_file=METADATA_FILES['exit']):
+             metadata_file=METADATA_FILES['exit'], metadata_update=None):
     """
     Read in the raw Exit tables and map destinations.
 
@@ -433,7 +456,7 @@ def get_exit(county=None, file_spec=None, data_dir=None, paths=None,
     if file_spec is None:
         file_spec = 'Exit.csv'
 
-    metadata = get_metadata_dict(metadata_file)
+    metadata = get_metadata_dict(metadata_file, metadata_update=metadata_update)
     df_destination_column = metadata.pop('destination_column')
     enid_column = metadata.pop('person_enrollment_ID')
     df = read_table(file_spec, county=county, data_dir=data_dir, paths=paths,
@@ -450,7 +473,7 @@ get_exit.__doc__ = get_exit.__doc__ % (file_path_boilerplate,
 
 def get_client(county=None, file_spec=None, data_dir=None, paths=None,
                metadata_file=METADATA_FILES['client'],
-               name_exclusion=False):
+               name_exclusion=False, metadata_update=None):
     """
     Read in the raw Client tables.
 
@@ -467,7 +490,7 @@ def get_client(county=None, file_spec=None, data_dir=None, paths=None,
     if file_spec is None:
         file_spec = 'Client.csv'
 
-    metadata = get_metadata_dict(metadata_file)
+    metadata = get_metadata_dict(metadata_file, metadata_update=metadata_update)
     # Don't want to deduplicate before checking if DOB is sane because the last
     # entry is taken in deduplication but the first entry indicates how early
     # they entered the system
@@ -583,7 +606,8 @@ get_client.__doc__ = get_client.__doc__ % (file_path_boilerplate,
 def get_disabilities(county=None, file_spec=None,  data_dir=None, paths=None,
                      metadata_file=METADATA_FILES['disabilities'],
                      disability_type_file=op.join(DATA_PATH, 'metadata',
-                                                  'disability_type.json')):
+                                                  'disability_type.json'),
+                     metadata_update=None):
     """
     Read in the raw Disabilities tables, convert sets of disablity type
     and response rows to columns to reduce to one row per
@@ -607,7 +631,7 @@ def get_disabilities(county=None, file_spec=None,  data_dir=None, paths=None,
     if file_spec is None:
         file_spec = 'Disabilities.csv'
 
-    metadata = get_metadata_dict(metadata_file)
+    metadata = get_metadata_dict(metadata_file, metadata_update=metadata_update)
     extra_metadata = {'type_column': None,
                       'response_column': None}
 
@@ -667,7 +691,8 @@ get_disabilities.__doc__ = get_disabilities.__doc__ % (file_path_boilerplate,
 
 
 def get_employment_education(county=None, file_spec=None, data_dir=None, paths=None,
-                             metadata_file=METADATA_FILES['employment_education']):
+                             metadata_file=METADATA_FILES['employment_education'],
+                             metadata_update=None):
     """
     Read in the raw EmploymentEducation tables.
 
@@ -684,8 +709,10 @@ def get_employment_education(county=None, file_spec=None, data_dir=None, paths=N
     """
     if file_spec is None:
         file_spec = 'EmploymentEducation.csv'
+    
+    metadata = get_metadata_dict(metadata_file, metadata_update=metadata_update)
 
-    df_wide = read_entry_exit_table(metadata_file, county=county,
+    df_wide = read_entry_exit_table(metadata, county=county,
                                     file_spec=file_spec, data_dir=data_dir,
                                     paths=paths)
 
@@ -696,7 +723,8 @@ get_employment_education.__doc__ = get_employment_education.__doc__ % (
 
 
 def get_health_dv(county=None, file_spec=None, data_dir=None, paths=None,
-                  metadata_file=METADATA_FILES['health_dv']):
+                  metadata_file=METADATA_FILES['health_dv'],
+                  metadata_update=None):
     """
     Read in the raw HealthAndDV tables.
 
@@ -713,8 +741,10 @@ def get_health_dv(county=None, file_spec=None, data_dir=None, paths=None,
     """
     if file_spec is None:
         file_spec = 'HealthAndDV.csv'
+    
+    metadata = get_metadata_dict(metadata_file, metadata_update=metadata_update)
 
-    df_wide = read_entry_exit_table(metadata_file, county=county,
+    df_wide = read_entry_exit_table(metadata, county=county,
                                     file_spec=file_spec, data_dir=data_dir,
                                     paths=paths)
 
@@ -725,7 +755,7 @@ get_health_dv.__doc__ = get_health_dv.__doc__ % (file_path_boilerplate,
 
 
 def get_income(county=None, file_spec=None, data_dir=None, paths=None,
-               metadata_file=METADATA_FILES['income']):
+               metadata_file=METADATA_FILES['income'], metadata_update=None):
     """
     Read in the raw IncomeBenefits tables.
 
@@ -743,7 +773,7 @@ def get_income(county=None, file_spec=None, data_dir=None, paths=None,
     if file_spec is None:
         file_spec = 'IncomeBenefits.csv'
 
-    metadata = get_metadata_dict(metadata_file)
+    metadata = get_metadata_dict(metadata_file, metadata_update=metadata_update)
     if 'columns_to_take_max' in metadata:
         columns_to_take_max = metadata.pop('columns_to_take_max')
     else:
@@ -793,7 +823,8 @@ get_income.__doc__ = get_income.__doc__ % (file_path_boilerplate,
 def get_project(county=None, file_spec=None, data_dir=None, paths=None,
                 metadata_file=METADATA_FILES['project'],
                 project_type_file=op.join(DATA_PATH, 'metadata',
-                                          'project_type.json')):
+                                          'project_type.json'),
+                metadata_update=None):
     """
     Read in the raw Exit tables and map to project info.
 
@@ -810,7 +841,7 @@ def get_project(county=None, file_spec=None, data_dir=None, paths=None,
     if file_spec is None:
         file_spec = 'Project.csv'
 
-    metadata = get_metadata_dict(metadata_file)
+    metadata = get_metadata_dict(metadata_file, metadata_update=metadata_update)
     project_type_column = metadata.pop('project_type_column')
     projectID = metadata.pop('program_ID')
     df = read_table(file_spec, county=county, data_dir=data_dir, paths=paths,
@@ -843,7 +874,8 @@ get_project.__doc__ = get_project.__doc__ % (file_path_boilerplate,
 
 
 def merge_tables(county=None, meta_files=METADATA_FILES, data_dir=None,
-                 paths=None, files=None, groups=True, name_exclusion=False):
+                 paths=None, files=None, groups=True, name_exclusion=False,
+                 table_metadata_update=None):
     """ Run all functions that clean up raw tables separately, and merge them
         all into the enrollment table, where each row represents the project
         enrollment of an individual.
@@ -870,6 +902,12 @@ def merge_tables(county=None, meta_files=METADATA_FILES, data_dir=None,
         paths : list
             list of directories inside data_dir to look for csv files in
 
+        table_metadata_update : dict of dict
+            Dict with keys corresponding to any of the keys in `meta_files`.
+            Values should be dicts containing any keys that should be updated
+            from the metadata_file. This allows the user to change just a few
+            values relative to a few of the metadata_files.
+
         Returns
         ----------
         dataframe with rows representing the record of a person per
@@ -878,15 +916,25 @@ def merge_tables(county=None, meta_files=METADATA_FILES, data_dir=None,
     if not isinstance(files, dict):
         files = {}
 
+    if table_metadata_update is None:
+        table_metadata_update = {}
+
+    # fill in None for every table that doesn't have updates
+    for table in meta_files:
+        if table not in table_metadata_update:
+            table_metadata_update[table] = None
+
     # Get enrollment data
     enroll = get_enrollment(county=county,
                             file_spec=files.get('enrollment', None),
                             metadata_file=meta_files.get('enrollment', None),
                             groups=groups, data_dir=data_dir,
-                            paths=paths)
+                            paths=paths,
+                            metadata_update = table_metadata_update['enrollment'])
     print('enroll n_rows:', len(enroll))
     enrollment_metadata = get_metadata_dict(meta_files.get('enrollment',
-                                            METADATA_FILES['enrollment']))
+                                            METADATA_FILES['enrollment']),
+                                            metadata_update=table_metadata_update['enrollment'])
     enrollment_enid_column = enrollment_metadata['person_enrollment_ID']
     enrollment_pid_column = enrollment_metadata['person_ID']
     enrollment_prid_column = enrollment_metadata['program_ID']
@@ -895,10 +943,12 @@ def merge_tables(county=None, meta_files=METADATA_FILES, data_dir=None,
     # Merge exit in
     exit_table = get_exit(county=county, file_spec=files.get('exit', None),
                           metadata_file=meta_files.get('exit', None),
-                          data_dir=data_dir, paths=paths)
+                          data_dir=data_dir, paths=paths,
+                          metadata_update=table_metadata_update['exit'])
     print('exit n_rows:', len(exit_table))
     exit_metadata = get_metadata_dict(meta_files.get('exit',
-                                      METADATA_FILES['exit']))
+                                      METADATA_FILES['exit']),
+                                      metadata_update=table_metadata_update['exit'])
     exit_ppid_column = exit_metadata['person_enrollment_ID']
 
     enroll_merge = pd.merge(left=enroll, right=exit_table, how='left',
@@ -917,7 +967,8 @@ def merge_tables(county=None, meta_files=METADATA_FILES, data_dir=None,
 
     print('client n_rows:', len(client))
     client_metadata = get_metadata_dict(meta_files.get('client',
-                                        METADATA_FILES['client']))
+                                        METADATA_FILES['client']),
+                                        metadata_update=table_metadata_update['client'])
     client_pid_column = client_metadata['person_ID']
     dob_column = client_metadata['dob_column']
     n_bad_dob = 0
@@ -990,10 +1041,12 @@ def merge_tables(county=None, meta_files=METADATA_FILES, data_dir=None,
                                     file_spec=files.get('disabilities', None),
                                     metadata_file=meta_files.get('disabilities', None),
                                     data_dir=data_dir,
-                                    paths=paths)
+                                    paths=paths,
+                                    metadata_update=table_metadata_update['disabilities'])
     print('disabilities n_rows:', len(disabilities))
     disabilities_metadata = get_metadata_dict(meta_files.get('disabilities',
-                                              METADATA_FILES['disabilities']))
+                                              METADATA_FILES['disabilities']),
+                                              metadata_update=table_metadata_update['disabilities'])
     disabilities_ppid_column = disabilities_metadata['person_enrollment_ID']
     enroll_merge = enroll_merge.merge(disabilities, how='left',
                                       left_on=enrollment_enid_column,
@@ -1007,10 +1060,12 @@ def merge_tables(county=None, meta_files=METADATA_FILES, data_dir=None,
     emp_edu = get_employment_education(county=county,
                                        file_spec=files.get('employment_education', None),
                                        metadata_file=meta_files.get('employment_education', None),
-                                       data_dir=data_dir, paths=paths)
+                                       data_dir=data_dir, paths=paths,
+                                       metadata_update=table_metadata_update['employment_education'])
     print('emp_edu n_rows:', len(emp_edu))
     emp_edu_metadata = get_metadata_dict(meta_files.get('employment_education',
-                                         METADATA_FILES['employment_education']))
+                                         METADATA_FILES['employment_education']),
+                                         metadata_update=table_metadata_update['employment_education'])
     emp_edu_ppid_column = emp_edu_metadata['person_enrollment_ID']
     enroll_merge = enroll_merge.merge(emp_edu, how='left',
                                       left_on=enrollment_enid_column,
@@ -1024,10 +1079,12 @@ def merge_tables(county=None, meta_files=METADATA_FILES, data_dir=None,
     health_dv = get_health_dv(county=county,
                               file_spec=files.get('health_dv', None),
                               metadata_file=meta_files.get('health_dv', None),
-                              data_dir=data_dir, paths=paths)
+                              data_dir=data_dir, paths=paths,
+                              metadata_update=table_metadata_update['health_dv'])
     print('health_dv n_rows:', len(health_dv))
     health_dv_metadata = get_metadata_dict(meta_files.get('health_dv',
-                                           METADATA_FILES['health_dv']))
+                                           METADATA_FILES['health_dv']),
+                                           metadata_update=table_metadata_update['health_dv'])
     health_dv_ppid_column = health_dv_metadata['person_enrollment_ID']
     enroll_merge = enroll_merge.merge(health_dv, how='left',
                                       left_on=enrollment_enid_column,
@@ -1040,10 +1097,12 @@ def merge_tables(county=None, meta_files=METADATA_FILES, data_dir=None,
     # Merge income in
     income = get_income(county=county, file_spec=files.get('income', None),
                         metadata_file=meta_files.get('income', None),
-                        data_dir=data_dir, paths=paths)
+                        data_dir=data_dir, paths=paths,
+                        metadata_update=table_metadata_update['income'])
     print('income n_rows:', len(income))
     income_metadata = get_metadata_dict(meta_files.get('income',
-                                        METADATA_FILES['income']))
+                                        METADATA_FILES['income']),
+                                        metadata_update=table_metadata_update['income'])
     income_ppid_column = income_metadata['person_enrollment_ID']
     enroll_merge = enroll_merge.merge(income, how='left',
                                       left_on=enrollment_enid_column,
@@ -1056,10 +1115,12 @@ def merge_tables(county=None, meta_files=METADATA_FILES, data_dir=None,
     # Merge project in
     project = get_project(county=county, file_spec=files.get('project', None),
                           metadata_file=meta_files.get('project', None),
-                          data_dir=data_dir, paths=paths)
+                          data_dir=data_dir, paths=paths,
+                          metadata_update=table_metadata_update['project'])
     print('project n_rows:', len(project))
     project_metadata = get_metadata_dict(meta_files.get('project',
-                                         METADATA_FILES['project']))
+                                         METADATA_FILES['project']),
+                                         metadata_update=table_metadata_update['project'])
     project_prid_column = project_metadata['program_ID']
     enroll_merge = enroll_merge.merge(project, how='left',
                                       left_on=enrollment_prid_column,

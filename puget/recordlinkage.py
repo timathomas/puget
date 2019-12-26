@@ -6,11 +6,11 @@ import recordlinkage as rl
 import networkx
 
 
-MATCH_THRESHOLD = 0.5
+MATCH_THRESHOLD = 0.6
 STRING_THRESHOLD = 0.85
 
 def block_and_match(df, block_variable, comparison_dict, match_threshold=MATCH_THRESHOLD,
-                    string_method="jarowinkler", string_threshold=STRING_THRESHOLD):
+                    string_method="damerau_levenshtein", string_threshold=STRING_THRESHOLD):
     """
     Use recordlinkage to block on one variable and compare on others
 
@@ -35,7 +35,7 @@ def block_and_match(df, block_variable, comparison_dict, match_threshold=MATCH_T
 
 
 def link_records(prelink_ids, link_list, match_threshold=MATCH_THRESHOLD,
-                 string_method="jarowinkler", string_threshold=STRING_THRESHOLD):
+                 string_method="damerau_levenshtein", string_threshold=STRING_THRESHOLD):
     """
     Link records from a dataset, using an iterative approach
 

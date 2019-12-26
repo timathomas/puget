@@ -13,7 +13,9 @@ required_packages <- list(
    c("IRanges", "other", "BiocManager"),
    c("data.table", "cran"),
    c("magrittr", "cran"),
-   c("igraph", "cran")
+   c("igraph", "cran"),
+   c("gdata", "cran"),
+   c("data.table", "cran")
 )
 
 # Function to load libraries without halting subprocess call in python
