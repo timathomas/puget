@@ -10,35 +10,10 @@ rm(list=ls())
 # ==========================================================================
 # Library
 # ==========================================================================
-if(!require(devtools)){
-	    install.packages("devtools")
-	    require(devtools)
-	}
 
-if(!require(gdata)){
-	    install.packages("gdata")
-	    require(gdata)
-	}
+if(!require(pacman)) install.packages("pacman")
+pacman::p_load(devtools, gdata, data.table, RecordLinkage, tidyverse, lubridate)
 
-if(!require(data.table)){
-	install.packages("data.table")
-	require(data.table)
-}
-
-if(!require(RecordLinkage)){
-	install.packages("RecordLinkage")
-	require(RecordLinkage)
-}
-
-if(!require(tidyverse)){
-	devtools::install_github("tidyverse/tidyverse")
-	require(tidyverse)
-}
-
-if(!require(lubridate)){
-	    devtools::install_github("tidyverse/lubridate")
-	    require(lubridate)
-	}
 # ==========================================================================
 # Data pull
 # ==========================================================================
@@ -46,13 +21,13 @@ if(!require(lubridate)){
 path <- "/home/t77/data"
 
 hmis <-
-  fread(paste0("/home/",usr,"/data/HILD/puget_preprocessed_07012019.csv")) %>%
+  fread(paste0(path,"/data/HILD/puget_preprocessed_08222019.csv")) %>%
   mutate(pid0 = paste("HMIS0_",PersonalID,sep=""),
          pid1 = paste0("HMIS1_",
                        stringr::str_pad(seq(1,nrow(.)),6,pad='0')))
 
 pha <-
-  fread(paste0("/home/",usr,"/data/HILD/pha_longitudinal_07_01_2019.csv")) %>%
+	fread(paste0(path,"/data/HILD/pha_longitudinal_20190724.csv")) %>%
   # pid comes from PHA, then pid0 is an id for our purposes
   mutate(pid0 = paste("PHA0_", pid, sep = ""),
          pid1 = paste0("PHA1_",
